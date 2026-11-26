@@ -16,7 +16,7 @@ const sizes = [
   { label: 'desktop', viewport: { width: 1440, height: 900 } },
   { label: 'phone', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 },
 ];
-const moments = [['1-sky', 400], ['2-falling', 1900], ['3-landing', 3500], ['4-rising', 4300], ['5-growing', 5400], ['6-grown', 9000]];
+const moments = [['1-sky', 400], ['2-falling', 1800], ['3-mouth', 3050], ['4-dropping', 3650], ['5-landed', 4700], ['6-done', 8000]];
 const problems = [];
 
 let visitor = 0;
@@ -33,17 +33,17 @@ async function open(size, reducedMotion = 'no-preference') {
   return page;
 }
 
-async function grownState(page) {
+async function landedState(page) {
   return page.evaluate((wish) => {
-    const t = [...document.querySelectorAll('.tree text.mine')].at(-1);
+    const t = [...document.querySelectorAll('.slip.mine')].at(-1);
     if (!t) return { found: false };
     const r = t.getBoundingClientRect();
     return {
       found: true,
-      text: t.textContent,
-      fullText: t.textContent === wish,
+      text: t.querySelector('.slip-text')?.getAttribute('aria-label') ?? '',
+      fullText: t.querySelector('.slip-text')?.getAttribute('aria-label') === wish,
       visible: r.width > 0 && r.height > 0,
-      offset: t.querySelector('textPath').getAttribute('startOffset'),
+      transform: t.getAttribute('transform'),
       scrollX: document.documentElement.scrollWidth - innerWidth,
       message: document.getElementById('wish-message').textContent,
     };
@@ -56,13 +56,13 @@ for (const size of sizes) {
   await page.fill('#wish-text', WISH);
   await page.fill('#wish-name', 'Muzaffar');
   await page.screenshot({ path: `${dir}/${name}-${size.label}-0-typed.png` });
-  const snapshot = () => page.evaluate(() => [...document.querySelectorAll('.tree text')].map((t) => `${t.dataset.id}@${t.querySelector('textPath').getAttribute('startOffset')}`));
+  const snapshot = () => page.evaluate(() => [...document.querySelectorAll('.slip')].map((t) => `${t.dataset.id}@${t.getAttribute('transform')}`));
   const before = await snapshot();
   await page.press('#wish-text', 'Enter');
   await page.waitForSelector('.falling-wish', { timeout: 5000 });
   const t0 = Date.now();
-  // A phone tree that would drop below 11px re-picks its wishes and cross-fades;
-  // only then may existing branches change.
+  // A full jar re-picks which wishes are open and cross-fades; only then may
+  // slips already in the jar change.
   const repicked = (await page.locator('.fading-out').count()) > 0;
   for (const [label, at] of moments) {
     await page.waitForTimeout(Math.max(0, at - (Date.now() - t0)));
@@ -70,22 +70,22 @@ for (const size of sizes) {
   }
   const after = new Set(await snapshot());
   const moved = before.filter((b) => !after.has(b));
-  if (moved.length && !repicked) problems.push(`${size.label}: ${moved.length} existing branches changed when the wish was added`);
-  if (repicked) console.log(`${size.label}: tree re-picked to keep text >= 11px (cross-faded)`);
-  const s = await grownState(page);
+  if (moved.length && !repicked) problems.push(`${size.label}: ${moved.length} slips already in the jar moved when the wish was added`);
+  if (repicked) console.log(`${size.label}: jar re-picked its open slips (cross-faded)`);
+  const s = await landedState(page);
   console.log(size.label, JSON.stringify(s));
-  if (!s.found || !s.visible) problems.push(`${size.label}: new branch not visible`);
+  if (!s.found || !s.visible) problems.push(`${size.label}: new slip not visible`);
   if (s.scrollX > 0) problems.push(`${size.label}: sideways scroll ${s.scrollX}px`);
   await page.close();
 
   const calm = await open(size, 'reduce');
   await calm.fill('#wish-text', WISH);
   await calm.press('#wish-text', 'Enter');
-  await calm.waitForFunction(() => document.getElementById('wish-message').textContent.includes('grown'));
+  await calm.waitForFunction(() => document.getElementById('wish-message').textContent.includes('in the jar'));
   await calm.screenshot({ path: `${dir}/${name}-${size.label}-reduced.png` });
-  const r = await grownState(calm);
+  const r = await landedState(calm);
   console.log(size.label, 'reduced', JSON.stringify(r), 'falling elements:', await calm.locator('.falling-wish, .seed').count());
-  if (!r.found || !r.visible) problems.push(`${size.label} reduced: branch not shown in place`);
+  if (!r.found || !r.visible) problems.push(`${size.label} reduced: slip not shown in place`);
   await calm.close();
 }
 await browser.close();

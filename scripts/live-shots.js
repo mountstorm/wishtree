@@ -1,7 +1,7 @@
 // Screens for Phase 3's live behaviour, at desktop and phone size:
 //   empty      a brand-new tree
-//   first      the first wish grown as the trunk
-//   arrival    a wish from another visitor grows in by polling
+//   first      the first wish in the jar
+//   arrival    a wish from another visitor drops in by polling
 //   limited    the kind 429 after 3 wishes in an hour
 //   resting    the API is down
 // Output: screenshots/ (or $SHOTS_DIR). Usage: node scripts/live-shots.js [name]
@@ -46,10 +46,10 @@ for (const size of sizes) {
   await p.fill('#wish-text', 'That this table is always full of laughter');
   await p.fill('#wish-name', 'Muzaffar');
   await p.press('#wish-text', 'Enter');
-  await p.waitForFunction(() => document.getElementById('wish-message').textContent.includes('grown'), null, { timeout: 15000 });
+  await p.waitForFunction(() => document.getElementById('wish-message').textContent.includes('in the jar'), null, { timeout: 15000 });
   await p.waitForTimeout(300);
   await shot(p, size, 'first');
-  if (!(await p.locator('#tree-status').isHidden())) problems.push(`${size.label}: empty-state text still showing after the first wish`);
+  if (!(await p.locator('#jar-status').isHidden())) problems.push(`${size.label}: empty-state text still showing after the first wish`);
 
   // ---- another visitor's wish arrives by polling
   const other = await fetch(`${url}api/wishes`, {
@@ -58,7 +58,7 @@ for (const size of sizes) {
   });
   if (other.status !== 201) problems.push(`other visitor POST ${other.status}`);
   const t0 = Date.now();
-  await p.waitForFunction(() => document.querySelectorAll('.tree text').length === 2, null, { timeout: 20000 });
+  await p.waitForFunction(() => document.querySelectorAll('.slip').length === 2, null, { timeout: 20000 });
   console.log(`${size.label}: other visitor's wish appeared after ${((Date.now() - t0) / 1000).toFixed(1)}s`);
   await p.waitForTimeout(1200);
   await shot(p, size, 'arrival');
