@@ -251,3 +251,15 @@ test('500 wishes lay out quickly', () => {
   chooseJar(makeWishes(500, 11), PHONE);
   assert.ok(performance.now() - t < 3000);
 });
+
+test('a freshly chosen jar has room for the next wishes to land on top', () => {
+  for (const box of [DESKTOP, PHONE]) {
+    for (const wishes of [sampleWishes, makeWishes(200, 12)]) {
+      const chosen = chooseJar(wishes, box);
+      const next = { id: 'zz-next', text: 'That everyone at our table feels at home this year', name: '', createdAt: '2027-01-01T00:00:00.000Z' };
+      const after = layoutJar([...wishes, next], chosen.options);
+      assert.equal(after.overflow, 0, `no room for one more at ${box.width}px`);
+      assert.deepEqual(after.slips.slice(0, -1), chosen.layout.slips);
+    }
+  }
+});

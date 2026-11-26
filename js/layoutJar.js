@@ -37,8 +37,8 @@ const FULL = {
 };
 const COMPACT = {
   jar: { width: 440, height: 640, corner: 70 },
-  font: 17,
-  lineWidth: 250,
+  font: 16,
+  lineWidth: 215,
   maxLines: 4,
   folds: 36,
   fold: { w: [28, 38], h: 13 },
@@ -207,10 +207,11 @@ function bbox(corners) {
 
 /**
  * @param {Array<{id:string,text:string,name?:string,createdAt:string}>} wishes
- * @param {{compact?: boolean, open?: number, since?: {id:string, createdAt:string}}} [options]
+ * @param {{compact?: boolean, open?: number, since?: {id:string, createdAt:string}, font?: number}} [options]
  *   compact: the narrow-screen jar. open: how many of the newest wishes are
  *   open, readable slips. since: instead, every wish from this one on is open
- *   (so a session's jar keeps its slips as new wishes arrive).
+ *   (so a session's jar keeps its slips as new wishes arrive). font: text
+ *   size on open slips in world units (chooseJar raises it on small screens).
  * @returns {{
  *   jar: {width:number, height:number, corner:number},
  *   slips: Array<{id:string, kind:'open'|'folded', x:number, y:number, angle:number,
@@ -225,6 +226,7 @@ function bbox(corners) {
 export function layoutJar(wishes, options = {}) {
   const cfg = options.compact ? COMPACT : FULL;
   const jar = { ...cfg.jar };
+  const font = options.font ?? cfg.font;
   const sorted = [...wishes].sort(compareWishes);
 
   let openCount;
@@ -248,7 +250,7 @@ export function layoutJar(wishes, options = {}) {
     const paper = PAPERS[Math.floor(rng() * PAPERS.length)];
     let w, h, lines = [], fontSize = 0, deg;
     if (kind === 'open') {
-      fontSize = cfg.font;
+      fontSize = font;
       lines = wrapText(wish.text, fontSize, cfg.lineWidth);
       if (lines.length > cfg.maxLines) lines = wrapText(wish.text, fontSize, (cfg.lineWidth * lines.length) / cfg.maxLines + fontSize);
       const longest = Math.max(...lines.map((l) => textWidthEm(l) * fontSize));
@@ -285,7 +287,7 @@ export function layoutJar(wishes, options = {}) {
     confetti: { count: confettiCount, height: confettiHeight },
     overflow,
     total: sorted.length,
-    fontSize: cfg.font,
+    fontSize: font,
   };
 }
 
@@ -316,7 +318,8 @@ export function fitJar(layout, box, pad = 16) {
 }
 
 /**
- * Picks the jar for a box: as many open slips as fit, with text >= 11px.
+ * Picks the jar for a box: as many open slips as fit (less some headroom for
+ * new arrivals), with text >= 11px.
  * Returns the options used, so a session can keep the same jar as wishes
  * arrive: layoutJar(wishes, options).
  */
@@ -324,14 +327,41 @@ export function chooseJar(wishes, box, layout = layoutJar) {
   const compact = box.width < COMPACT_BREAKPOINT;
   const cfg = compact ? COMPACT : FULL;
   const sorted = [...wishes].sort(compareWishes);
+  // The coarse list finds a count that fits; a binary search between it and
+  // the next larger (which overflowed) finds the most that fit.
+  // The jar's scale depends only on the box, so pick the font that keeps
+  // text at MIN_FONT_PX or more (rounded up to a tenth, so it is stable).
+  const scale = fitJar({ jar: cfg.jar, fontSize: cfg.font }, box).scale;
+  const font = Math.max(cfg.font, Math.ceil((MIN_FONT_PX / scale) * 10) / 10);
+  const tryOpen = (open) => {
+    const result = layout(wishes, { compact, open, font });
+    return { layout: result, fit: fitJar(result, box), open };
+  };
   let best = null;
+  let tooMany = null;
   for (const open of cfg.openChoices) {
-    const result = layout(wishes, { compact, open });
-    best = { layout: result, fit: fitJar(result, box), open };
-    if (!result.overflow) break;
+    best = tryOpen(open);
+    if (!best.layout.overflow) break;
+    tooMany = open;
   }
+  if (tooMany && !best.layout.overflow) {
+    let lo = best.open, hi = tooMany;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1;
+      const attempt = tryOpen(mid);
+      if (attempt.layout.overflow) hi = mid;
+      else {
+        lo = mid;
+        best = attempt;
+      }
+    }
+  }
+  // Leave headroom: open a fifth fewer than fit, so the next few wishes can
+  // land on top without the whole jar having to settle again.
+  const headroom = best.open > 1 ? Math.max(1, Math.round(best.open * 0.2)) : 0;
+  if (headroom && best.open - headroom < sorted.length) best = tryOpen(best.open - headroom);
   const opened = Math.min(best.open, sorted.length);
   const oldestOpen = sorted[sorted.length - opened];
-  const options = { compact, ...(oldestOpen ? { since: { id: oldestOpen.id, createdAt: oldestOpen.createdAt } } : { open: best.open }) };
+  const options = { compact, font, ...(oldestOpen ? { since: { id: oldestOpen.id, createdAt: oldestOpen.createdAt } } : { open: best.open }) };
   return { layout: best.layout, fit: best.fit, options };
 }
