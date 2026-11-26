@@ -2,7 +2,7 @@
 //
 // Pure and deterministic: the same wishes (in any order) always give the same
 // tree on every device. All randomness is seeded from wish ids, and text width
-// comes from a fixed Fraunces width table rather than the browser.
+// comes from a fixed DM Serif Display width table rather than the browser.
 //
 // Coordinates are SVG-style world units with the tree's base at (0, 0) and the
 // tree growing toward negative y. One world unit is one pixel at scale 1.
