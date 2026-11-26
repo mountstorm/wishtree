@@ -20,6 +20,21 @@
       <h1>Wish Tree</h1>
       <p>Every wish becomes a branch.</p>
     </header>
+    <form class="wish-form" id="wish-form" novalidate autocomplete="off">
+      <div class="fields">
+        <label class="field wish-field">
+          <span class="visually-hidden">Your wish</span>
+          <input id="wish-text" name="text" type="text" maxlength="80" placeholder="Type a wish…" enterkeyhint="send" aria-describedby="wish-count">
+          <span class="counter" id="wish-count">80 left</span>
+        </label>
+        <label class="field name-field">
+          <span class="visually-hidden">Your first name (optional)</span>
+          <input id="wish-name" name="name" type="text" maxlength="24" placeholder="First name (optional)" autocomplete="given-name">
+        </label>
+        <button type="submit" id="wish-send">Let it fall</button>
+      </div>
+      <p class="form-message" id="wish-message" role="status" aria-live="polite"></p>
+    </form>
   </main>
   <script type="module" src="js/main.js"></script>
 </body>

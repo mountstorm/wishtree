@@ -13,14 +13,14 @@ export function el(name, attrs = {}, parent) {
 }
 
 /** Where the ground sits for a viewport: the top of the Earth's curve. */
-export function groundFor(width, height) {
-  const groundH = Math.round(Math.min(150, Math.max(78, height * 0.13)));
+export function groundFor(width, height, minGround = 0) {
+  const groundH = Math.round(Math.max(minGround, Math.min(150, Math.max(78, height * 0.13))));
   const radius = Math.max(width * 0.78, 460);
   return { groundY: height - groundH, radius, cx: width / 2 };
 }
 
-export function drawScene(svg, width, height) {
-  const { groundY, radius, cx } = groundFor(width, height);
+export function drawScene(svg, width, height, minGround = 0) {
+  const { groundY, radius, cx } = groundFor(width, height, minGround);
   const defs = el('defs', {}, svg);
 
   const earth = el('radialGradient', { id: 'earth-fill', cx: 0.5, cy: 0, r: 0.6, fx: 0.5, fy: 0 }, defs);
