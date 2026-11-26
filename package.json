@@ -1,0 +1,18 @@
+{
+  "name": "wishtree",
+  "private": true,
+  "type": "module",
+  "description": "A Thanksgiving tree grown from visitors' wishes",
+  "scripts": {
+    "dev": "node scripts/serve.js",
+    "test": "node --test test/",
+    "screenshots": "node scripts/screenshots.js",
+    "measure-font": "node scripts/measure-font.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "playwright": "^1.65.1"
+  }
+}
