@@ -229,15 +229,18 @@ function displayText(text, maxChars) {
  * Grows a tree from wishes.
  *
  * @param {Array<{id:string,text:string,name?:string,createdAt:string}>} wishes
- * @param {{compact?: boolean, maxBranches?: number}} [options]
+ * @param {{compact?: boolean, maxBranches?: number, since?: object}} [options]
  *   compact: narrow-screen tree with bigger relative text, shortened text and
  *   fewer, shallower twigs. maxBranches: how many wishes to draw as branches;
  *   the rest (oldest after the trunk) become extra trunk thickness.
+ *   since: instead of maxBranches, draw every wish from this one onward
+ *   (returned by chooseLayout so a phone's tree stays stable as wishes arrive).
  * @returns {{
  *   branches: Array<{id:string, parentId:string|null, depth:number, text:string,
  *     path:string, width:number, fontSize:number, textStart:number,
  *     textLength:number, stem:string|null, leaf:{x:number,y:number,angle:number,
- *     size:number,color:string}, base:{x:number,y:number}, reversed:boolean}>,
+ *     size:number,color:string}, base:{x:number,y:number}, growPath:string|null,
+ *     reversed:boolean}>,
  *   bark: Array<{path:string, width:number}>,
  *   bounds: {minX:number, minY:number, maxX:number, maxY:number},
  *   hidden: number, total: number, trunkWidth: number, minFontSize: number
@@ -246,6 +249,8 @@ function displayText(text, maxChars) {
  *   always reads left to right); the text runs from `textStart` for
  *   `textLength` along it. `width` is the branch's thickness, its font size.
  *   `base` is where the branch grows from (on its parent, or the ground).
+ *   `growPath` is the branch from where its text starts; the text sits at
+ *   offset 0 on it (or `textStart` when reversed). Null for trunk strands.
  */
 export function layoutTree(wishes, options = {}) {
   const cfg = { ...(options.compact ? COMPACT : FULL) };
@@ -272,7 +277,11 @@ export function layoutTree(wishes, options = {}) {
   }
   const rest = sorted.filter((w) => !trunkWishes.includes(w));
   const room = cfg.maxBranches - trunkWishes.length;
-  const branchWishes = room > 0 ? rest.slice(Math.max(0, rest.length - room)) : [];
+  // `since` pins which wishes a narrow tree shows: every wish from that one on.
+  // Unlike a count, it stays put as new wishes arrive, so nothing moves.
+  const pool = options.since ? rest.filter((w) => compareWishes(w, options.since) >= 0) : rest;
+  const cap = options.since ? MAX_BRANCHES - trunkWishes.length : room;
+  const branchWishes = cap > 0 ? pool.slice(Math.max(0, pool.length - cap)) : [];
   const hidden = rest.length - branchWishes.length;
 
   const grid = new Grid();
@@ -440,10 +449,19 @@ export function layoutTree(wishes, options = {}) {
     }
     if (!placed) continue; // nowhere left without overlap: it thickens the trunk instead
     const segs = [arcToCubic(placed.at, placed.a0, placed.sweep, placed.len)];
+    // The same arc from where the text starts: words grow out along this one
+    // so they never pass over the parent's letters.
+    const growSeg = arcToCubic(
+      arcAt(placed.at, placed.a0, placed.sweep, placed.len, placed.gap),
+      arcAt(placed.at, placed.a0, placed.sweep, placed.len, placed.gap).a,
+      (placed.sweep * (placed.len - placed.gap)) / placed.len,
+      placed.len - placed.gap,
+    );
     const node = makeNode({
       wish, text, font: placed.font, depth: placed.depth, parent: placed.parent,
       segs, gap: placed.gap, textLen: placed.textW, leafSize: placed.leafSize, attachMin: 0, rng,
     });
+    node.growSeg = growSeg;
     placed.parent.children++;
     nodes.push(node);
     area += node.textLen * node.font * 1.2;
@@ -499,6 +517,7 @@ export function layoutTree(wishes, options = {}) {
       stem,
       leaf: nd.leaf,
       base: { x: round(nd.pts[0].x), y: round(nd.pts[0].y) },
+      growPath: nd.growSeg ? segsToPath([nd.growSeg], nd.reversed) : null,
       reversed: nd.reversed,
     };
   });
@@ -554,17 +573,26 @@ export const COMPACT_BREAKPOINT = 640;
 /**
  * Picks the layout for a box: the full tree on wide screens; on narrow ones a
  * compact tree with as many branches as fit while text stays >= 11px.
+ * `layout` can be a memoised layoutTree. Returns the options used, so a
+ * session can keep the same tree as new wishes arrive: layoutTree(wishes, options).
  */
-export function chooseLayout(wishes, box) {
+export function chooseLayout(wishes, box, layout = layoutTree) {
+  const layoutTreeFn = layout;
   if (box.width >= COMPACT_BREAKPOINT) {
-    const layout = layoutTree(wishes);
-    return { layout, fit: fitTree(layout, box) };
+    const layout = layoutTreeFn(wishes);
+    return { layout, fit: fitTree(layout, box), options: {} };
   }
   let best = null;
+  const byId = new Map(wishes.map((w) => [w.id, w]));
   for (const maxBranches of [40, 32, 26, 20, 15, 11, 8, 6, 4, 2, 1]) {
-    const layout = layoutTree(wishes, { compact: true, maxBranches });
+    const layout = layoutTreeFn(wishes, { compact: true, maxBranches });
     const fit = fitTree(layout, box);
-    best = { layout, fit };
+    const oldest = layout.branches.filter((b) => b.depth > 0).reduce((min, b) => {
+      const w = byId.get(b.id);
+      return !min || compareWishes(w, min) < 0 ? w : min;
+    }, null);
+    const since = oldest ? { id: oldest.id, createdAt: oldest.createdAt } : null;
+    best = { layout, fit, options: { compact: true, maxBranches, ...(since && { since }) } };
     if (fit.minFontPx >= MIN_FONT_PX) break;
   }
   return best;

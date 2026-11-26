@@ -331,3 +331,35 @@ test('each branch grows from its parent or from the ground', () => {
     }
   }
 });
+
+test('a phone tree keeps its branches as new wishes arrive', () => {
+  const phone = { width: 390, height: 600 };
+  const wishes = makeWishes(120, 14);
+  const chosen = chooseLayout(wishes, phone);
+  assert.deepEqual(layoutTree(wishes, chosen.options), chosen.layout, 'the returned options reproduce the layout');
+
+  const more = [...wishes, ...makeWishes(3, 15).map((w, i) => ({ ...w, createdAt: new Date(Date.UTC(2026, 11, 1) + i * 1000).toISOString() }))];
+  const after = layoutTree(more, chosen.options);
+  const newIds = new Set(more.slice(-3).map((w) => w.id));
+  assert.deepEqual(after.branches.filter((b) => !newIds.has(b.id)), chosen.layout.branches);
+  assert.equal(after.branches.filter((b) => newIds.has(b.id)).length, 3);
+});
+
+test('growPath starts where a branch\'s text starts', () => {
+  for (const b of layoutTree(makeWishes(60, 16)).branches) {
+    if (b.depth === 0) {
+      assert.equal(b.growPath, null);
+      continue;
+    }
+    const full = polyline(b.path);
+    const grow = polyline(b.growPath);
+    // The text's first glyph sits at the same point on both paths.
+    const onFull = pointAt(full, b.textStart);
+    const onGrow = pointAt(grow, b.reversed ? b.textStart : 0);
+    assert.ok(Math.hypot(onFull.x - onGrow.x, onFull.y - onGrow.y) < 0.6, `${b.id} growPath is offset`);
+    const textEnd = b.textStart + b.textLength;
+    const endFull = pointAt(full, textEnd);
+    const endGrow = pointAt(grow, b.reversed ? textEnd : b.textLength);
+    assert.ok(Math.hypot(endFull.x - endGrow.x, endFull.y - endGrow.y) < 0.6, `${b.id} growPath bends differently`);
+  }
+});
