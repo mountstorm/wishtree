@@ -1,6 +1,6 @@
 import { chooseLayout, layoutTree, fitTree, MIN_FONT_PX } from './layoutTree.js';
 import { drawScene, el } from './scene.js';
-import { drawTree } from './treeView.js';
+import { drawTree, markMine } from './treeView.js';
 import { playWish, hideBranch, showBranch, glow } from './grow.js';
 import { sampleWishes } from './sampleWishes.js';
 
@@ -25,7 +25,24 @@ const state = {
   journey: null, // the wish animation in progress
   lastSize: '',
   options: null, // layout options picked for this screen; kept while wishes arrive
+  mine: loadMine(), // ids of wishes this visitor made, marked on the tree
 };
+
+// The visitor's own wishes stay marked for the rest of the visit (and across
+// a reload). Storage can be unavailable; the marker is a nicety, not a need.
+function loadMine() {
+  try {
+    return new Set(JSON.parse(sessionStorage.getItem('wishtree:mine') || '[]'));
+  } catch {
+    return new Set();
+  }
+}
+function rememberMine(id) {
+  state.mine.add(id);
+  try {
+    sessionStorage.setItem('wishtree:mine', JSON.stringify([...state.mine].slice(-20)));
+  } catch { /* private mode: keep it for this page only */ }
+}
 
 // Layouts only change when the wishes do, so resizing never recomputes them.
 const layoutCache = new Map();
@@ -67,7 +84,7 @@ function render(pending = null) {
   }
   const { layout, fit } = chosen;
   const placed = { ...fit, y: groundY };
-  const { group, parts } = drawTree(el('g', {}, svg), defs, layout, placed, { top: 0, bottom: g.height });
+  const { group, parts } = drawTree(el('g', {}, svg), defs, layout, placed, { top: 0, bottom: g.height }, { mine: new Set([...state.mine].filter((id) => id !== pending)) });
   if (pending && parts.has(pending)) hideBranch(parts.get(pending));
   state.current = { layout, fit: placed, group, parts, geometry: { ...g, groundY } };
   return state.current;
@@ -96,7 +113,10 @@ function finishJourney() {
   state.journey.token.cancelled = true;
   stage.querySelectorAll('.falling-wish, .seed, .fading-out').forEach((n) => n.remove());
   const part = state.current?.parts.get(state.journey.id);
-  if (part) showBranch(part);
+  if (part) {
+    showBranch(part);
+    markMine(part);
+  }
   state.journey = null;
   setBusy(false);
 }
@@ -140,6 +160,7 @@ async function submitWish(event) {
   }
 
   const wish = { id: makeId(), text, name, createdAt: new Date().toISOString() };
+  rememberMine(wish.id);
   const before = state.current;
   const oldPicture = svg.cloneNode(true);
   state.wishes.push(wish);
@@ -154,6 +175,7 @@ async function submitWish(event) {
     if (part) {
       showBranch(part);
       glow(part);
+      markMine(part);
     }
     say(part ? 'Your wish has grown into the tree.' : 'Your wish has joined the trunk.');
     return;
@@ -179,6 +201,7 @@ async function submitWish(event) {
     group: now.group,
   }, token);
   if (token.cancelled) return;
+  markMine(part);
   state.journey = null;
   setBusy(false);
   say('Your wish has grown into the tree.');

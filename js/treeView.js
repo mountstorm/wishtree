@@ -12,7 +12,24 @@ export function treeTransform({ scale, x, y }) {
  */
 let generation = 0;
 
-export function drawTree(parent, defs, layout, fit, sky) {
+// A four-point sparkle one unit across, centred on the origin.
+const SPARKLE = 'M0-1C.08-.3.3-.08 1 0 .3.08.08.3 0 1-.08.3-.3.08-1 0-.3-.08-.08-.3 0-1Z';
+
+/** Marks a branch as the visitor's own: a lasting soft glow and a sparkle by its leaf. */
+export function markMine(part) {
+  if (part.text.classList.contains('mine')) return;
+  part.text.classList.add('mine');
+  const { leaf, fontSize } = part.branch;
+  const a = (leaf.angle * Math.PI) / 180;
+  const d = leaf.size * 1.25;
+  const x = leaf.x + Math.cos(a) * d + Math.sin(a) * leaf.size * 0.5;
+  const y = leaf.y + Math.sin(a) * d - Math.cos(a) * leaf.size * 0.5;
+  const g = part.text.ownerSVGElement.querySelector('.markers') || part.text.parentNode;
+  const spark = el('g', { class: 'mine-marker', transform: `translate(${x.toFixed(1)} ${y.toFixed(1)})`, 'aria-hidden': 'true' }, g);
+  el('path', { d: SPARKLE, transform: `scale(${(fontSize * 0.55).toFixed(2)})` }, spark);
+}
+
+export function drawTree(parent, defs, layout, fit, sky, { mine = new Set() } = {}) {
   // Ids are unique per drawing, so an old copy of the tree can fade out on top
   // of the new one without their paths getting mixed up.
   const prefix = `t${++generation}-`;
@@ -38,6 +55,7 @@ export function drawTree(parent, defs, layout, fit, sky) {
   const stems = el('g', { class: 'stems', 'aria-hidden': 'true' }, group);
   const words = el('g', { class: 'words' }, group);
   const leaves = el('g', { class: 'leaves', 'aria-hidden': 'true' }, group);
+  el('g', { class: 'markers', 'aria-hidden': 'true' }, group);
 
   const parts = new Map();
   layout.branches.forEach((b, i) => {
@@ -64,7 +82,9 @@ export function drawTree(parent, defs, layout, fit, sky) {
     const leafPos = el('g', { transform: `translate(${b.leaf.x} ${b.leaf.y}) rotate(${b.leaf.angle})` }, leaves);
     const leaf = el('path', { d: LEAF_PATH, fill: b.leaf.color, transform: `scale(${b.leaf.size})` }, leafPos);
 
-    parts.set(b.id, { text, textPath, path, growPath, stem, leaf, branch: b });
+    const part = { text, textPath, path, growPath, stem, leaf, branch: b };
+    parts.set(b.id, part);
   });
+  for (const id of mine) if (parts.has(id)) markMine(parts.get(id));
   return { group, parts };
 }

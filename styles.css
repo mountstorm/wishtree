@@ -118,6 +118,12 @@ body {
 @keyframes seed-pop { to { scale: 2.4; opacity: 0; } }
 
 .tree text { transition: filter 2.4s ease-out; }
-.tree text.fresh { filter: drop-shadow(0 0 3px rgba(255, 226, 160, 0.95)) drop-shadow(0 0 9px rgba(255, 180, 90, 0.7)); transition: none; }
+.tree text.branch.fresh { filter: drop-shadow(0 0 3px rgba(255, 226, 160, 0.95)) drop-shadow(0 0 9px rgba(255, 180, 90, 0.7)); transition: none; }
 .fading-out { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; transition: opacity 1s ease; }
 .fading-out.gone { opacity: 0; }
+
+/* The visitor's own wish: a soft lasting glow and a sparkle by its leaf. */
+.tree text.mine { filter: drop-shadow(0 0 2px rgba(255, 226, 160, 0.8)) drop-shadow(0 0 6px rgba(255, 186, 100, 0.45)); }
+.mine-marker path { fill: #fff3cf; filter: drop-shadow(0 0 3px rgba(255, 214, 140, 0.95)); }
+.mine-marker { animation: sparkle 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes sparkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
