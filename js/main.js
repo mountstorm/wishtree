@@ -139,9 +139,49 @@ async function submitWish(event) {
     return;
   }
 
-  say('Thank you. Soon your wish will fall onto the tree.');
+  const wish = { id: makeId(), text, name, createdAt: new Date().toISOString() };
+  const before = state.current;
+  const oldPicture = svg.cloneNode(true);
+  state.wishes.push(wish);
+  state.version++;
   textInput.value = '';
   updateCounter();
+
+  const now = render(wish.id);
+  const part = now?.parts.get(wish.id);
+  if (!now || !part || reducedMotion.matches) {
+    // Reduced motion: the branch simply appears in place, briefly aglow.
+    if (part) {
+      showBranch(part);
+      glow(part);
+    }
+    say(part ? 'Your wish has grown into the tree.' : 'Your wish has joined the trunk.');
+    return;
+  }
+
+  // Keep the tree at its old size and ease it to the new one during the fall,
+  // as long as the existing branches are the same ones (always on wide screens).
+  const sameTree = before && before.layout.branches.every((b, i) => now.layout.branches[i]?.id === b.id);
+  if (sameTree) now.group.setAttribute('transform', before.group.getAttribute('transform'));
+  else crossFade(oldPicture);
+
+  setBusy(true);
+  say('Your wish is falling…');
+  const token = { cancelled: false };
+  state.journey = { id: wish.id, token };
+  await playWish(wish, part, {
+    stage,
+    top: now.geometry.top,
+    groundY: now.geometry.groundY,
+    width: now.geometry.width,
+    fromFit: sameTree ? before.fit : null,
+    toFit: now.fit,
+    group: now.group,
+  }, token);
+  if (token.cancelled) return;
+  state.journey = null;
+  setBusy(false);
+  say('Your wish has grown into the tree.');
 }
 
 textInput.addEventListener('input', () => { updateCounter(); if (message.classList.contains('error')) say(''); });
