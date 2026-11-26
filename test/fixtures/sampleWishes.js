@@ -1,4 +1,4 @@
-// 60 hard-coded wishes for Phase 1. Replaced by the API in Phase 3.
+// 60 sample wishes: test fixtures, and a seed for the dev server (npm run dev -- --seed).
 export const sampleWishes = [
   { id: "w001-0", text: "Health and long dinners with everyone I love", name: "Grandma Rose", createdAt: "2026-11-01T09:00:00Z" },
   { id: "w002-1c7869", text: "That my brother finally comes home this winter", name: "Aisha", createdAt: "2026-11-01T18:44:00Z" },
