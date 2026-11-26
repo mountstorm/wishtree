@@ -2,10 +2,11 @@
 // Usage: node scripts/screenshots.js [name]
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
-import { startServer } from './serve.js';
+import { startServer, memoryService } from './serve.js';
+import { sampleWishes } from '../test/fixtures/sampleWishes.js';
 
 const name = process.argv[2] || 'shot';
-const server = await startServer(5199);
+const server = await startServer(5199, { api: await memoryService(sampleWishes) });
 await mkdir(new URL('../screenshots/', import.meta.url), { recursive: true });
 const browser = await chromium.launch();
 const sizes = [
