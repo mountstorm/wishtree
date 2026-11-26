@@ -126,3 +126,21 @@ body {
 .mine-marker path { fill: #fff3cf; filter: drop-shadow(0 0 3px rgba(255, 214, 140, 0.95)); }
 .mine-marker { animation: sparkle 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes sparkle { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+/* ---------------------------------------------------------------- loading, empty and resting states */
+.tree-status {
+  position: absolute; left: 16px; right: 16px; top: 38%;
+  transform: translateY(-50%);
+  text-align: center; pointer-events: none;
+}
+.tree-status[hidden] { display: none; }
+.status-title {
+  margin: 0; font-size: clamp(30px, 5.4vw, 54px); line-height: 1.1; color: #fff3e2;
+  text-shadow: 0 0 28px rgba(255, 190, 110, 0.35);
+}
+.status-line { margin: 10px 0 0; font-size: clamp(17px, 2vw, 22px); color: #f2d2ad; }
+.tree-status.quiet .status-title { font-size: clamp(18px, 2.2vw, 22px); color: #f2d2ad; text-shadow: none; }
+
+.seedling-glow { fill: rgba(255, 206, 130, 0.22); animation: breathe 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.seedling-stem { fill: none; stroke: #8e9b44; stroke-width: 3; stroke-linecap: round; }
+@keyframes breathe { 0%, 100% { opacity: 0.6; scale: 0.94; } 50% { opacity: 1; scale: 1.06; } }

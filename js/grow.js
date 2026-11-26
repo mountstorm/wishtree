@@ -139,15 +139,20 @@ export async function playWish(wish, part, scene, token) {
   setTimeout(() => seed.remove(), 600);
   if (token.cancelled) return;
 
-  // 3. The branch grows: stem, then the words slide out, then the leaf opens.
+  // 3. The branch grows.
+  await growBranch(part, fit.scale, token);
+}
+
+/** Grows a hidden branch in place: stem, then the words slide out, then the leaf opens. */
+export async function growBranch(part, scale, token, { glowMs = 5000 } = {}) {
   const { stem, textPath, leaf, branch } = part;
   if (stem) {
     const len = stem.getTotalLength();
     await tween(260, (t) => { stem.style.strokeDashoffset = String(len * (1 - t)); }, token);
   }
   const g = growGeometry(part);
-  const growMs = Math.min(2400, 1100 + branch.textLength * fit.scale * 1.6);
-  glow(part, growMs + 5000);
+  const growMs = Math.min(2400, 1100 + branch.textLength * scale * 1.6);
+  if (glowMs) glow(part, growMs + glowMs);
   await tween(growMs, (t) => {
     textPath.setAttribute('startOffset', lerp(g.hidden, g.settled, easeOutCubic(t)).toFixed(2));
   }, token);

@@ -75,3 +75,13 @@ export function drawScene(svg, width, height, minGround = 0) {
 
 // A leaf one unit long pointing along +x from its stem at the origin.
 export const LEAF_PATH = 'M0 0C.25-.42.78-.42 1 0 .78.42.25.42 0 0Z';
+
+/** The empty tree: a small glowing seedling where the trunk will rise. */
+export function drawSeedling(svg, x, groundY, size = 1) {
+  const g = el('g', { class: 'seedling', transform: `translate(${x.toFixed(1)} ${groundY.toFixed(1)}) scale(${size.toFixed(3)})`, 'aria-hidden': 'true' }, svg);
+  el('ellipse', { class: 'seedling-glow', cx: 0, cy: -18, rx: 46, ry: 34 }, g);
+  el('path', { class: 'seedling-stem', d: 'M0 4C0-10 1-22-2-34' }, g);
+  el('path', { d: LEAF_PATH, fill: '#7a8b3a', transform: 'translate(-1.5 -30) rotate(-150) scale(17)' }, g);
+  el('path', { d: LEAF_PATH, fill: '#a5b04a', transform: 'translate(-1.5 -33) rotate(-35) scale(20)' }, g);
+  return g;
+}
