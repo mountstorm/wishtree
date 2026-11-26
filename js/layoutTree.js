@@ -558,7 +558,9 @@ export function fitTree(layout, box, pad = 16) {
   const { minX, minY, maxX } = layout.bounds;
   const halfW = Math.max(1, -minX, maxX);
   const height = Math.max(1, -minY);
-  const scale = Math.min((box.width / 2 - pad) / halfW, (box.height - pad) / height);
+  // A young tree stays small: never zoom in past trunk text of MAX_FONT_PX.
+  const maxFont = Math.max(layout.minFontSize, ...layout.branches.map((b) => b.fontSize));
+  const scale = Math.min((box.width / 2 - pad) / halfW, (box.height - pad) / height, MAX_FONT_PX / maxFont);
   return {
     scale,
     x: box.width / 2,
@@ -568,6 +570,7 @@ export function fitTree(layout, box, pad = 16) {
 }
 
 export const MIN_FONT_PX = 11;
+export const MAX_FONT_PX = 30;
 export const COMPACT_BREAKPOINT = 640;
 
 /**

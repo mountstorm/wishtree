@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutTree, chooseLayout, fitTree, MAX_BRANCHES, TRUNK_COUNT } from '../js/layoutTree.js';
-import { sampleWishes } from '../js/sampleWishes.js';
+import { sampleWishes } from './fixtures/sampleWishes.js';
 
 // ---------------------------------------------------------------- fixtures
 
@@ -361,5 +361,16 @@ test('growPath starts where a branch\'s text starts', () => {
     const endFull = pointAt(full, textEnd);
     const endGrow = pointAt(grow, b.reversed ? textEnd : b.textLength);
     assert.ok(Math.hypot(endFull.x - endGrow.x, endFull.y - endGrow.y) < 0.6, `${b.id} growPath bends differently`);
+  }
+});
+
+test('a young tree is not blown up to fill the screen', async () => {
+  const { MAX_FONT_PX } = await import('../js/layoutTree.js');
+  for (const n of [1, 3, 8]) {
+    for (const box of [{ width: 1440, height: 640 }, { width: 390, height: 560 }]) {
+      const { layout, fit } = chooseLayout(makeWishes(n, 17), box);
+      const biggest = Math.max(...layout.branches.map((b) => b.fontSize)) * fit.scale;
+      assert.ok(biggest <= MAX_FONT_PX + 1e-9, `${n} wishes at ${box.width}px: ${biggest.toFixed(1)}px text`);
+    }
   }
 });
