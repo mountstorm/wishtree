@@ -1,7 +1,7 @@
-import { chooseLayout, layoutTree, fitTree, MIN_FONT_PX } from './layoutTree.js';
-import { drawScene, drawSeedling, el } from './scene.js';
-import { drawTree, markMine } from './treeView.js';
-import { playWish, growBranch, hideBranch, showBranch, glow } from './grow.js';
+import { chooseJar, layoutJar, fitJar, jarSize, MIN_FONT_PX } from './layoutJar.js';
+import { drawRoom, drawJarBack, drawConfetti, drawJarFront, mouthOf, el } from './scene.js';
+import { drawSlips, markMine } from './jarView.js';
+import { playWish, dropSlip, hideSlip, showSlip, glow } from './drop.js';
 import { fetchWishes, sendWish, ApiError } from './api.js';
 
 const POLL_MS = 15_000;
@@ -18,7 +18,7 @@ const nameInput = document.getElementById('wish-name');
 const sendButton = document.getElementById('wish-send');
 const counter = document.getElementById('wish-count');
 const message = document.getElementById('wish-message');
-const status = document.getElementById('tree-status');
+const status = document.getElementById('jar-status');
 const statusTitle = document.getElementById('status-title');
 const statusLine = document.getElementById('status-line');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -30,10 +30,10 @@ const state = {
   version: 0,
   current: null, // { layout, fit, group, parts, geometry }
   journey: null, // the visitor's wish animation in progress
-  growing: null, // other visitors' wishes growing in place
+  growing: null, // other visitors' wishes dropping in
   queued: null, // a poll result waiting for an animation to finish
   lastSize: '',
-  options: null, // layout options picked for this screen; kept while wishes arrive
+  options: null, // jar options picked for this screen; kept while wishes arrive
   mine: loadMine(),
 };
 
@@ -63,7 +63,7 @@ function cachedLayout(wishes, options = {}) {
   const key = `${state.version}|${JSON.stringify(options)}`;
   if (!layoutCache.has(key)) {
     if (layoutCache.size > 12) layoutCache.clear();
-    layoutCache.set(key, layoutTree(wishes, options));
+    layoutCache.set(key, layoutJar(wishes, options));
   }
   return layoutCache.get(key);
 }
@@ -74,44 +74,48 @@ function geometry() {
   const stageTop = stage.getBoundingClientRect().top;
   const top = masthead.getBoundingClientRect().bottom - stageTop + 8;
   const formTop = form.getBoundingClientRect().top - stageTop;
-  return { width, height, top, minGround: height - formTop + 18 };
+  return { width, height, top, bottom: formTop - 10 };
 }
 
-/** Draws the scene and tree. Branches whose ids are in `pending` are drawn ungrown. */
+const jarTransform = ({ scale, x, y }) => `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${scale.toFixed(4)})`;
+
+/** Draws the room, the jar and its slips. Slips whose ids are in `pending` wait at the mouth. */
 function render(pending = new Set()) {
   const g = geometry();
   if (!g.width || !g.height) return null;
   state.lastSize = `${g.width}x${g.height}`;
+  const box = { width: g.width, height: Math.max(120, g.bottom - g.top) };
 
-  svg.setAttribute('viewBox', `0 0 ${g.width} ${g.height}`);
-  svg.replaceChildren();
-  const { defs, groundY } = drawScene(svg, g.width, g.height, g.minGround);
-  updateStatus();
-
-  if (!state.wishes.length) {
-    if (state.phase === 'ready') drawSeedling(svg, g.width / 2, groundY, Math.min(1.3, Math.max(0.9, g.width / 900)));
-    state.current = { layout: null, fit: null, group: null, parts: new Map(), geometry: { ...g, groundY } };
-    return state.current;
-  }
-
-  const box = { width: g.width, height: groundY - g.top };
   let chosen = null;
   if (state.options) {
-    // Same screen, more wishes: keep the same tree and let new branches join it.
+    // Same screen, more wishes: keep the same jar and let new slips land on top.
     const layout = cachedLayout(state.wishes, state.options);
-    const fit = fitTree(layout, box);
-    if (!state.options.compact || fit.minFontPx >= MIN_FONT_PX) chosen = { layout, fit };
+    const fit = fitJar(layout, box);
+    if (!layout.overflow && fit.minFontPx >= MIN_FONT_PX) chosen = { layout, fit };
   }
   if (!chosen) {
-    chosen = chooseLayout(state.wishes, box, cachedLayout);
+    chosen = chooseJar(state.wishes, box, cachedLayout);
     state.options = chosen.options;
   }
   const { layout, fit } = chosen;
-  const placed = { ...fit, y: groundY };
+  const placed = { scale: fit.scale, x: fit.x, y: g.top + fit.y };
+  const size = jarSize(layout);
+
+  svg.setAttribute('viewBox', `0 0 ${g.width} ${g.height}`);
+  svg.replaceChildren();
+  const jarCentre = { x: placed.x, y: placed.y - (layout.jar.height / 2) * placed.scale };
+  const defs = drawRoom(svg, g.width, g.height, jarCentre, size.width * placed.scale);
+  const group = el('g', { class: 'jar', transform: jarTransform(placed) }, svg);
+  drawJarBack(group, defs, layout.jar);
+  drawConfetti(group, layout.jar, layout.confetti);
   const mine = new Set([...state.mine].filter((id) => !pending.has(id)));
-  const { group, parts } = drawTree(el('g', {}, svg), defs, layout, placed, { top: 0, bottom: g.height }, { mine });
-  for (const id of pending) if (parts.has(id)) hideBranch(parts.get(id));
-  state.current = { layout, fit: placed, group, parts, geometry: { ...g, groundY } };
+  const parts = drawSlips(group, defs, layout, { mine });
+  drawJarFront(group, defs, layout.jar);
+  const mouth = mouthOf(layout.jar);
+  for (const id of pending) if (parts.has(id)) hideSlip(parts.get(id), mouth);
+
+  state.current = { layout, fit: placed, group, parts, mouth, geometry: { ...g, jarCentre } };
+  updateStatus();
   return state.current;
 }
 
@@ -121,14 +125,17 @@ function updateStatus() {
     title = 'Gathering wishes…';
     quiet = true;
   } else if (state.phase === 'resting' && !state.wishes.length) {
-    title = 'The tree is resting.';
+    title = 'The jar is resting.';
     line = 'We will keep trying to reach it.';
     quiet = true;
   } else if (!state.wishes.length && !state.journey) {
     title = 'Be the first wish.';
-    line = 'The tree starts from you.';
+    line = 'The jar starts with you.';
   }
   status.hidden = !title;
+  // Sit the words inside the empty jar.
+  const centre = state.current?.geometry?.jarCentre;
+  if (centre) status.style.top = `${Math.round(centre.y)}px`;
   status.classList.toggle('quiet', quiet);
   if (statusTitle.textContent !== title) statusTitle.textContent = title;
   if (statusLine.textContent !== line) statusLine.textContent = line;
@@ -145,14 +152,15 @@ function crossFade(oldPicture) {
   setTimeout(() => oldPicture.remove(), 1200);
 }
 
-const sameBranches = (before, now) => !!before?.layout && !!now?.layout
-  && before.layout.branches.every((b, i) => now.layout.branches[i]?.id === b.id);
+// The jar only changed by gaining slips on top: everything already there is the same.
+const sameSlips = (before, now) => !!before?.layout && !!now?.layout
+  && before.layout.slips.every((s, i) => now.layout.slips[i]?.id === s.id && now.layout.slips[i].kind === s.kind);
 
 function onResize() {
   const size = `${stage.clientWidth}x${stage.clientHeight}`;
   if (size === state.lastSize) return;
-  finishAnimations(); // a resize mid-animation simply shows the grown tree
-  state.options = null; // a new screen size picks its own tree
+  finishAnimations(); // a resize mid-animation simply shows the finished jar
+  state.options = null; // a new screen size picks its own jar
   render();
 }
 
@@ -162,14 +170,14 @@ function finishAnimations() {
   if (state.journey) {
     const part = state.current?.parts.get(state.journey.id);
     if (part) {
-      showBranch(part);
+      showSlip(part);
       markMine(part);
     }
-    say('Your wish has grown into the tree.');
+    say('Your wish is in the jar.');
   }
   for (const id of state.growing?.ids || []) {
     const part = state.current?.parts.get(id);
-    if (part) showBranch(part);
+    if (part) showSlip(part);
   }
   state.journey = null;
   state.growing = null;
@@ -221,25 +229,24 @@ function applyServerList({ wishes, total }) {
   const oldPicture = svg.cloneNode(true);
   state.wishes = [...state.wishes.filter((w) => !removed.has(w.id)), ...added].sort(byTime);
   state.version++;
-  if (removed.size) state.options = null; // the tree has to regrow without them
+  if (removed.size) state.options = null; // the jar settles again without them
 
-  // On first load everything simply appears; later arrivals grow in place.
+  // On first load everything simply appears; later arrivals drop in.
   const animate = !first && !removed.size && !reducedMotion.matches && added.length <= 12;
   const now = render(animate ? new Set(added.map((w) => w.id)) : new Set());
-  if (!first && !sameBranches(before, now)) crossFade(oldPicture);
-  if (animate && now) growArrivals(added.map((w) => w.id));
+  if (!first && !sameSlips(before, now)) crossFade(oldPicture);
+  if (animate && now) dropArrivals(added.map((w) => w.id));
 }
 
-async function growArrivals(ids) {
+async function dropArrivals(ids) {
   const token = { cancelled: false };
   state.growing = { ids, token };
-  const scale = state.current.fit.scale;
-  await Promise.all(ids.map(async (id, i) => {
+  const { mouth } = state.current;
+  // One after another, in the order they were made.
+  for (const id of ids) {
     const part = state.current.parts.get(id);
-    if (!part) return;
-    await new Promise((r) => setTimeout(r, i * 450));
-    if (!token.cancelled) await growBranch(part, scale, token, { glowMs: 1500 });
-  }));
+    if (part && !token.cancelled) await dropSlip(part, mouth, token, { glowMs: 1500 });
+  }
   if (token.cancelled) return;
   state.growing = null;
   applyQueued();
@@ -330,20 +337,20 @@ async function submitWish(event) {
   const now = render(new Set([wish.id]));
   const part = now?.parts.get(wish.id);
   if (!now || !part || reducedMotion.matches) {
-    // Reduced motion: the branch simply appears in place, briefly aglow.
+    // Reduced motion: the slip simply appears in place, briefly aglow.
     if (part) {
-      showBranch(part);
+      showSlip(part);
       glow(part);
       markMine(part);
     }
     setBusy(false);
-    say(part ? 'Your wish has grown into the tree.' : 'Your wish has joined the trunk.');
+    say('Your wish is in the jar.');
     return;
   }
 
-  // Keep the tree at its old size and ease it to the new one during the fall,
-  // as long as the existing branches are the same ones.
-  const same = sameBranches(before, now);
+  // Keep the jar at its old size and ease it to the new one during the fall,
+  // as long as the slips already there are the same ones.
+  const same = sameSlips(before, now);
   if (same) now.group.setAttribute('transform', before.group.getAttribute('transform'));
   else if (before?.layout) crossFade(oldPicture);
 
@@ -354,17 +361,19 @@ async function submitWish(event) {
   await playWish(wish, part, {
     stage,
     top: now.geometry.top,
-    groundY: now.geometry.groundY,
     width: now.geometry.width,
+    mouth: now.mouth,
+    mouthScreen: { x: now.fit.x + now.mouth.x * now.fit.scale, y: now.fit.y + now.mouth.y * now.fit.scale },
     fromFit: same ? before.fit : null,
     toFit: now.fit,
     group: now.group,
+    transform: jarTransform,
   }, token);
   if (token.cancelled) return;
   markMine(part);
   state.journey = null;
   setBusy(false);
-  say('Your wish has grown into the tree.');
+  say('Your wish is in the jar.');
   applyQueued();
 }
 
@@ -378,7 +387,7 @@ updateCounter();
 // ---------------------------------------------------------------- start
 
 new ResizeObserver(onResize).observe(stage);
-// The title's real height is known once fonts load; pick the tree for it then.
+// The title's real height is known once fonts load; pick the jar for it then.
 document.fonts?.ready.then(() => {
   if (state.journey || state.growing) return;
   state.options = null;

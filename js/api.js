@@ -11,8 +11,8 @@ export class ApiError extends Error {
   }
 }
 
-const RESTING = 'The tree is resting right now. Please try again in a moment.';
-const OFFLINE = 'We could not reach the tree. Check your connection and try again.';
+const RESTING = 'The jar is resting right now. Please try again in a moment.';
+const OFFLINE = 'We could not reach the jar. Check your connection and try again.';
 
 async function request(method, body) {
   let res;
