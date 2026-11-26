@@ -237,7 +237,7 @@ function displayText(text, maxChars) {
  *   branches: Array<{id:string, parentId:string|null, depth:number, text:string,
  *     path:string, width:number, fontSize:number, textStart:number,
  *     textLength:number, stem:string|null, leaf:{x:number,y:number,angle:number,
- *     size:number,color:string}, reversed:boolean}>,
+ *     size:number,color:string}, base:{x:number,y:number}, reversed:boolean}>,
  *   bark: Array<{path:string, width:number}>,
  *   bounds: {minX:number, minY:number, maxX:number, maxY:number},
  *   hidden: number, total: number, trunkWidth: number, minFontSize: number
@@ -245,6 +245,7 @@ function displayText(text, maxChars) {
  *   `path` is the full branch curve (reversed for left-leaning branches so text
  *   always reads left to right); the text runs from `textStart` for
  *   `textLength` along it. `width` is the branch's thickness, its font size.
+ *   `base` is where the branch grows from (on its parent, or the ground).
  */
 export function layoutTree(wishes, options = {}) {
   const cfg = { ...(options.compact ? COMPACT : FULL) };
@@ -497,6 +498,7 @@ export function layoutTree(wishes, options = {}) {
       textLength: round(nd.textLen),
       stem,
       leaf: nd.leaf,
+      base: { x: round(nd.pts[0].x), y: round(nd.pts[0].y) },
       reversed: nd.reversed,
     };
   });

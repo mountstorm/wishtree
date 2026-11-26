@@ -93,6 +93,12 @@ function glyphDiscs(branch) {
   return { discs: out, length: pts.at(-1).s };
 }
 
+function distToSegment(p, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+
 function findOverlap(branches) {
   const cell = 30;
   const grid = new Map();
@@ -290,6 +296,38 @@ test('trunk strands never overlap, across many mixes of early wish lengths', () 
     for (const compact of [false, true]) {
       const overlap = findOverlap(layoutTree(wishes, { compact }).branches);
       assert.equal(overlap, null, `salt ${salt}${compact ? ' compact' : ''}: ${overlap}`);
+    }
+  }
+});
+
+test('once the trunk has formed, a newer wish adds one branch and never moves the existing ones', () => {
+  // The trunk is chosen from the earliest 12 wishes, so it settles at 12.
+  for (const n of [12, 13, 59, 250]) {
+    const wishes = makeWishes(n + 1, 12);
+    const before = layoutTree(wishes.slice(0, n));
+    const after = layoutTree(wishes);
+    const newest = wishes.at(-1).id;
+    assert.deepEqual(after.branches.filter((b) => b.id !== newest), before.branches, `with ${n} existing wishes`);
+    const added = after.branches.find((b) => b.id === newest);
+    assert.ok(added, 'the newest wish has a branch');
+    assert.ok(added.depth > 0, 'it grows as a branch');
+  }
+});
+
+test('each branch grows from its parent or from the ground', () => {
+  const layout = layoutTree(makeWishes(80, 13));
+  const byId = new Map(layout.branches.map((b) => [b.id, b]));
+  for (const b of layout.branches) {
+    const pts = polyline(b.path);
+    const start = b.reversed ? pts.at(-1) : pts[0];
+    assert.ok(Math.hypot(start.x - b.base.x, start.y - b.base.y) < 0.2, `${b.id} base is not where its path starts`);
+    if (b.depth === 0) {
+      assert.ok(b.base.y >= 0, `${b.id} trunk does not start at the ground`);
+    } else {
+      const parentPts = polyline(byId.get(b.parentId).path);
+      let near = Infinity;
+      for (let i = 1; i < parentPts.length; i++) near = Math.min(near, distToSegment(b.base, parentPts[i - 1], parentPts[i]));
+      assert.ok(near < 1, `${b.id} does not start on its parent`);
     }
   }
 });
